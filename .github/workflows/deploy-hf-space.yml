@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史，浅克隆无法 push 到 HF
 
       - name: Push to Hugging Face Space
         env:
