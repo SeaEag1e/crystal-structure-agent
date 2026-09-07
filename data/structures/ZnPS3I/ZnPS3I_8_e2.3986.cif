@@ -1,0 +1,32 @@
+# generated using pymatgen
+data_ZnPS3I
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   5.43887138
+_cell_length_b   5.91684055
+_cell_length_c   5.92957544
+_cell_angle_alpha   89.04132080
+_cell_angle_beta   87.55561829
+_cell_angle_gamma   89.52602386
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   ZnPS3I
+_chemical_formula_sum   'Zn1 P1 S3 I1'
+_cell_volume   190.61350946
+_cell_formula_units_Z   1
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Zn  Zn0  1  0.28537616  0.68884414  0.54274404  1
+  P  P1  1  0.68987942  0.72424412  0.95060807  1
+  S  S2  1  0.54051769  0.48362312  0.80286002  1
+  S  S3  1  0.97004664  0.85364091  0.77028674  1
+  S  S4  1  0.52355379  0.85301805  0.20508294  1
+  I  I5  1  0.04533849  0.35555169  0.32333621  1

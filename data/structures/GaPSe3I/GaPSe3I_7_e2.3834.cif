@@ -1,0 +1,32 @@
+# generated using pymatgen
+data_GaPSe3I
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   4.12413263
+_cell_length_b   6.80172157
+_cell_length_c   8.54228020
+_cell_angle_alpha   83.89849091
+_cell_angle_beta   75.95106506
+_cell_angle_gamma   72.50155640
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   GaPSe3I
+_chemical_formula_sum   'Ga1 P1 Se3 I1'
+_cell_volume   221.55343686
+_cell_formula_units_Z   1
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Ga  Ga0  1  0.66135597  0.67627245  0.84585637  1
+  P  P1  1  0.14316212  0.57620132  0.98873538  1
+  Se  Se2  1  0.21213543  0.78294355  0.67715925  1
+  Se  Se3  1  0.79871666  0.33457175  0.91730517  1
+  Se  Se4  1  0.46427357  0.82086384  0.10391808  1
+  I  I5  1  0.02927325  0.37882927  0.40478393  1

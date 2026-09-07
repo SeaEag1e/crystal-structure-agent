@@ -1,0 +1,18 @@
+# CPU wheels first: keeps HF Spaces builds small (~200MB torch instead of ~2GB CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch>=2.3,<2.6
+streamlit>=1.38,<2
+langgraph>=0.2.60,<2
+langchain-openai>=0.2,<1
+langchain-core>=0.3
+matgl>=1.2
+pymatgen>=2024.5
+spglib>=2.4
+pandas
+numpy>=1.26,<2.2
+stmol>=0.2
+py3Dmol>=2.0
+
+# Local GPU generation only (optional, not needed on hosted demo):
+# chemparse

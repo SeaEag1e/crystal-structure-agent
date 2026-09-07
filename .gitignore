@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+
+# Streamlit secrets (never commit keys)
+.streamlit/secrets.toml
+
+# Heavy model weights & archives (DiffCSP++ 242MB checkpoint stays local)
+DiffCSP/
+*.pt
+*.pth
+*.ckpt
+# M3GNet .pt weights: HF rejects binary files in git; load from Hub at runtime
+data/models/matgl/**/*.pt
+*.zip
+*.rar
+*.tar.gz
+
+# Runtime outputs
+data/generated/
+data/tmp/
+outputs_*/
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,32 @@
+# generated using pymatgen
+data_AlPSe3I
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   4.17142391
+_cell_length_b   6.87548018
+_cell_length_c   7.37636471
+_cell_angle_alpha   100.46022797
+_cell_angle_beta   106.69760895
+_cell_angle_gamma   89.70146179
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   AlPSe3I
+_chemical_formula_sum   'Al1 P1 Se3 I1'
+_cell_volume   199.02234406
+_cell_formula_units_Z   1
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Al  Al0  1  0.39544612  0.43543473  0.37522942  1
+  P  P1  1  0.80588073  0.56057733  0.17016065  1
+  Se  Se2  1  0.72557998  0.81805342  0.03437041  1
+  Se  Se3  1  0.93891531  0.60044020  0.48132840  1
+  Se  Se4  1  0.23627611  0.37206590  0.04650084  1
+  I  I5  1  0.47524104  0.13504028  0.54427481  1
