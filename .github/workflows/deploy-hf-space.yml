@@ -1,0 +1,24 @@
+name: Deploy to Hugging Face Space
+
+# 每次 push 到 main 分支时自动同步代码到 HF Space
+# 也支持在 Actions 页面手动触发 (workflow_dispatch)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add space "https://SeaEag1e:${HF_TOKEN}@huggingface.co/spaces/SeaEag1e/crystal-structure-agent.git"
+          git push space main --force
