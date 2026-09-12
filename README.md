@@ -10,205 +10,159 @@ pinned: true
 
 # 💎 Crystal Structure Agent
 
-**An LLM agent that turns natural language into crystal-structure discovery — diffusion-based generation, ML interatomic-potential scoring, symmetry analysis, and experiment comparison, all behind one chat interface.**
+我在做层状磷酸卤化物（MPX₃I 族，比如 GaPSe₃I）的计算筛选。每筛一个化学式都要串五六个脚本：扩散模型生成候选结构 → 机器学习势打分 → 对称性分析 → 跟实验结构对比。一个组成盯下来半天就没了，脚本换个环境还经常跑不起来。
 
-[![Agent](https://img.shields.io/badge/agent-LangGraph-8A2BE2)](https://www.langchain.com/langgraph)
-[![LLM](https://img.shields.io/badge/LLM-GLM--4--Flash-blue)](https://open.bigmodel.cn/)
-[![Scoring](https://img.shields.io/badge/scoring-M3GNet-green)](https://github.com/materialsvirtuallab/matgl)
-[![Generation](https://img.shields.io/badge/generation-DiffCSP%2B%2B-orange)](https://github.com/jiaor17/DiffCSP-PP)
-[![UI](https://img.shields.io/badge/UI-Streamlit-red)](https://streamlit.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+这个项目就是想把这套流程变成一个能对话的系统。输入"找出最稳定的结构并分析它们的对称性"，Agent 自己规划工具链、执行、返回一份带 3D 结构的报告，浏览器里直接旋转查看。
 
-> 🚀 **Live demo**: this repo is a ready-to-deploy Hugging Face **Streamlit Space** — see [Deploy your own](#-deploy-your-own-hf-space) below.
+## 我主要想解决的问题
 
----
+**科研流程自动化**：以前一个化学式要手工跑半天，现在一句话。Agent 会把复合需求拆成工具链，比如上面那句话会自动变成"查库 → 稳定性筛选 → 对称分析"三步执行。
 
-## Why I built this
+**没有大模型也能用**：每个用到 LLM 的地方（意图识别、任务规划、结果汇总）都写了规则兜底。不填 API Key 系统照样完整跑通，只是从"大模型理解"退回到"关键词匹配"。这也是我对"怎么把科研流程放到 LLM Agent 后面还不脆弱"这个问题的回答：LLM 挂了系统不能挂。
 
-I work on computational screening of layered phosphate halides (the MPX₃-derived family, e.g. GaPSe₃I — our lab has an experimental C2/c reference structure). The full research loop is: **generate candidate structures → score stability → analyze symmetry → compare with experiment**. That loop used to take me half a day of gluing scripts together for *one* composition.
+**没有 GPU 也能演示**：扩散模型生成需要 GPU，云端免费环境跑不了。我的做法是在本地 GPU 上把 186 个结构全部预先生成好，打包成结构库上线。云端负责轻量的实时打分（M3GNet 只有 2.3MB）。GPU 生成工具在调用时会检查 CUDA，没有就返回"为什么做不了"的说明，而不是报错崩溃。
 
-So I built this project: an end-to-end system where you type
+**全程可追溯**：Agent 每一步做了什么——识别出什么意图、生成了什么计划、调了哪个工具、传了什么参数——都折叠显示在对话页里，点开就能看。科研场景里这个比"直接给答案"重要。
 
-> *"找出最稳定的结构并分析它们的对称性"*
+## 能做什么
 
-and an agent plans the tool chain, executes it, and hands you back a Markdown report with 3D structures you can rotate in the browser. It is also my answer to a real engineering question: **how do you put a domain-science workflow behind an LLM agent without making it fragile?** My approach: strict tool whitelisting, rule-based fallbacks at every LLM boundary, and graceful degradation when hardware (GPU) is unavailable.
-
-## Architecture
-
-```mermaid
-flowchart TB
-    subgraph UI["Streamlit UI"]
-        CHAT["💬 Agent Chat"]
-        LIB["🧊 Structure Library"]
-        GPU["⚡ Local GPU Mode"]
-    end
-
-    subgraph AGENT["LangGraph Agent (Supervisor pattern)"]
-        I["Intent Node<br/>意图识别<br/>(LLM + regex + rules)"]
-        P["Planner Node<br/>任务规划引擎<br/>(JSON plan + whitelist)"]
-        E["Executor Node<br/>工具调度<br/>(conditional-edge loop)"]
-        S["Summarizer Node<br/>结果汇总<br/>(LLM + rule-template fallback)"]
-        I --> P --> E -->|"cursor < len(plan)"| E
-        E -->|"done"| S
-    end
-
-    subgraph TOOLS["6 Tools (@tool)"]
-        T1["query_structure_library"]
-        T2["score_structures<br/>(M3GNet)"]
-        T3["analyze_symmetry<br/>(spglib)"]
-        T4["filter_stable"]
-        T5["compare_with_experiment"]
-        T6["generate_local_gpu<br/>(DiffCSP++, CUDA only)"]
-    end
-
-    subgraph CORE["Core Library (pure functions)"]
-        C1["structures.py"]
-        C2["scoring.py"]
-        C3["symmetry.py"]
-        C4["generation.py"]
-    end
-
-    subgraph DATA["Knowledge Base (precomputed)"]
-        IDX["index.csv<br/>186 structures / 16 formulas<br/>eform · spacegroup · polarity · rank"]
-        CIF["data/structures/**/*.cif"]
-        W["M3GNet weights<br/>(embedded, ~2.3 MB)"]
-    end
-
-    CHAT --> AGENT
-    AGENT --> TOOLS --> CORE
-    TOOLS --> DATA
-    LIB --> DATA
-    GPU --> C4
-```
-
-**Design decisions worth noting:**
-
-- **Every LLM boundary has a rule-based fallback.** Intent recognition, planning, and summarization each degrade to deterministic rules/templates if the LLM call fails or returns malformed JSON. The demo works fully without any API key.
-- **Agent-aware hardware capability.** `generate_local_gpu` checks CUDA at call time and returns a graceful-degradation dict instead of crashing — the agent *tells you* why it can't generate, rather than erroring out.
-- **Precomputed knowledge base + on-demand scoring.** `index.csv` (precomputed formation energy, space group, polarity, rank) is the fast path; M3GNet scoring on-the-fly (`torch.inference_mode()`, thread-capped, cached model resource) is used for re-scoring and uploads.
-- **Performance controls for free-tier hosting**: `st.cache_resource` for model/LLM/graph singletons, `st.cache_data` for index loads and per-structure symmetry analysis, `torch.set_num_threads(2)` for 2-vCPU Spaces.
-
-## What you can do with it
-
-| Page | What it does |
+| 页面 | 功能 |
 |---|---|
-| 🏠 Home | Project intro, architecture diagram, live environment self-check (M3GNet / API key / CUDA) |
-| 💬 Agent Chat | Natural-language queries — the agent shows its **intent → plan → tool trace → report** |
-| 🧊 Structure Library | Filter 186 structures by formula/energy/space group, rotate 3D ball-stick models (stmol + py3Dmol), re-score any structure with M3GNet |
-| ⚡ Local GPU Mode | Full DiffCSP++ diffusion generation (1000-step sampling) — needs a local CUDA GPU |
+| 🏠 首页 | 项目简介、架构图、环境自检（M3GNet / API Key / CUDA 三个指示灯） |
+| 💬 Agent 对话 | 自然语言查询，展示完整的意图 → 计划 → 工具轨迹 → 报告 |
+| 🧊 结构库 | 按化学式/能量/空间群筛选 186 个结构，3D 球棍模型旋转查看，任意结构实时重新打分 |
+| ⚡ 本地 GPU 模式 | 完整的 DiffCSP++ 扩散生成（1000 步采样），需要本地 CUDA 显卡 |
 
-**Example agent queries** (Chinese or English):
+可以用中文或英文问，举几个例子：
 
 ```text
 浏览 GaPS3I 的结构
-找出最稳定的结构并分析它们的对称性        # triggers 3-tool chain: query → filter → symmetry
-生成的结构和实验结构对比一下              # triggers compare_with_experiment (C2/c reference)
+找出最稳定的结构并分析它们的对称性        # 触发 3 步工具链：查库 → 筛选 → 对称分析
+生成的结构和实验结构对比一下              # 触发与实验 C2/c 参照结构的对比
 ```
 
-## Quick start (local, CPU is enough)
+## 快速开始
 
 ```bash
-git clone https://github.com/<your-name>/crystal-structure-agent.git
+git clone https://github.com/SeaEag1e/crystal-structure-agent.git
 cd crystal-structure-agent
 pip install -r requirements.txt
-
-# Optional: enable the LLM brain (otherwise rule-based mode, still fully functional)
-# Get a free key at https://open.bigmodel.cn/  — GLM-4-Flash is free
-set ZHIPU_API_KEY=your_key        # Windows
-# export ZHIPU_API_KEY=your_key   # Linux/macOS
-
 streamlit run app.py
 ```
 
-> ⚠️ **Security note**: never commit `ZHIPU_API_KEY` to git. On Hugging Face Spaces, put it in *Settings → Variables and secrets* instead. `.gitignore` already excludes `.env` and secrets files.
-
-## Deploy your own HF Space
-
-The repo root carries the Streamlit Space frontmatter (see top of this file), so deployment is a git push:
+CPU 就能跑。想启用大模型大脑的话，去[智谱开放平台](https://open.bigmodel.cn/)免费领一个 GLM-4-Flash 的 Key：
 
 ```bash
-# 1. Create an empty Streamlit Space on huggingface.co (SDK: Streamlit, app_file: app.py)
-git remote add space https://huggingface.co/spaces/<your-name>/crystal-structure-agent
+# Windows
+set ZHIPU_API_KEY=your_key
+# Linux/macOS
+export ZHIPU_API_KEY=your_key
+```
+
+不填也行，规则模式功能完整。
+
+> ⚠️ 别把 API Key 提交进 git。部署到线上时放在平台的 Secrets 配置里。
+
+## 在线体验
+
+仓库顶部带了 Streamlit Space 的配置头（就是本文件最上面那段 frontmatter），所以部署到 Hugging Face Spaces 只需要：
+
+```bash
+# 在 huggingface.co 上建一个 Space 后
+git remote add space https://huggingface.co/spaces/SeaEag1e/crystal-structure-agent
 git push space main
-
-# 2. Add ZHIPU_API_KEY in Space Settings → Secrets (optional but recommended)
 ```
 
-First build takes ~10 min (CPU torch wheel ≈ 200 MB). Cold start runs the environment self-check on the home page.
+然后在 Space 的 Settings → Variables and secrets 里配上 `ZHIPU_API_KEY`。首次构建约 10 分钟（CPU 版 torch 比较大）。
 
-## Local GPU generation (optional)
+## 技术上怎么实现的
 
-The hosted demo ships a **precomputed library** (186 structures across 16 MPX₃I-family compositions) because DiffCSP++ needs a GPU. On your own CUDA machine:
-
-```bash
-pip install chemparse torch_geometric
-# Point to your DiffCSP++ checkout + mp_csp checkpoint
-set DIFFCSP_ROOT=G:\path\to\DiffCSP-main
-python scripts/generate_gpu.py --formula GaPSe3I --num 3 --out outputs/
+```
+┌────────────────────────────────────────────┐
+│  Streamlit UI                              │
+│  首页自检 │ Agent对话 │ 结构库 │ GPU生成   │
+├────────────────────────────────────────────┤
+│  LangGraph Agent                           │
+│  意图识别 → 任务规划 → 工具调度(循环)      │
+│                       ↘ 结果汇总           │
+├────────────────────────────────────────────┤
+│  6 个工具（白名单）                         │
+│  查库 │ M3GNet打分 │ 对称分析 │ 稳定性筛选  │
+│  实验对比 │ GPU生成                        │
+├────────────────────────────────────────────┤
+│  core/ 纯函数科学计算库                     │
+│  structures │ scoring │ symmetry │ generation │
+├────────────────────────────────────────────┤
+│  预计算知识库                               │
+│  index.csv (186结构) │ CIF │ M3GNet权重    │
+└────────────────────────────────────────────┘
 ```
 
-Unset/no-GPU environments degrade gracefully — both the agent tool and the Streamlit page explain what is missing instead of crashing.
+几个关键设计：
 
-## Project structure
+- **每个 LLM 边界都有规则兜底**。意图识别失败走关键词匹配，规划失败走组合链式规划，汇总失败走模板输出。断网、Key 错、JSON 返回乱码，系统都照常工作。
+- **预计算 + 实时混合**。生成和批量打分在本地离线做完存进 index.csv，在线只做单结构实时打分。免费 CPU 也能秒级响应。
+- **Agent 能感知硬件边界**。GPU 工具调用时检查 CUDA，不可用时返回降级说明，Agent 会在报告里告诉你为什么做不了、去哪里能做。
+- **为免费资源做的性能控制**。模型和 LLM 客户端用 `st.cache_resource` 单例缓存，推理用 `torch.inference_mode()`，线程数按 2-vCPU 限制。
+
+## 项目结构
 
 ```
 crystal-structure-agent/
-├── app.py                     # Home: intro + architecture + self-check
-├── pages/                     # Streamlit multi-page app
-│   ├── 1_Agent_Chat.py        # Agent conversation + trace viewer
-│   ├── 2_Structure_Library.py # Browser + 3D viewer + re-scoring
-│   └── 3_Local_GPU_Mode.py    # DiffCSP++ generation (CUDA)
-├── agent/                     # LangGraph agent
-│   ├── graph.py               # intent → planner → executor → summarizer
-│   ├── tools.py               # 6 @tool definitions (whitelisted)
-│   ├── prompts.py             # system/intent/planner/summarizer prompts
-│   ├── llm.py                 # GLM-4-Flash (OpenAI-compatible)
-│   └── state.py               # AgentState TypedDict
-├── core/                      # Pure-function science library
-│   ├── structures.py          # CIF I/O, index loading
-│   ├── scoring.py             # M3GNet formation energy (+ fallback)
-│   ├── symmetry.py            # spglib space group + polarity
-│   └── generation.py          # DiffCSP++ wrapper (lazy imports)
+├── app.py                     # 首页：简介 + 架构 + 环境自检
+├── pages/
+│   ├── 1_Agent_Chat.py        # Agent 对话 + 轨迹展示
+│   ├── 2_Structure_Library.py # 结构库 + 3D 查看器 + 重新打分
+│   └── 3_Local_GPU_Mode.py    # DiffCSP++ 生成（需要 CUDA）
+├── agent/                     # LangGraph 智能体
+│   ├── graph.py               # 意图 → 规划 → 执行 → 汇总
+│   ├── tools.py               # 6 个 @tool（白名单）
+│   ├── prompts.py             # 四组提示词
+│   ├── llm.py                 # GLM-4-Flash 接入
+│   └── state.py               # AgentState 定义
+├── core/                      # 纯函数科学计算库
+│   ├── structures.py          # CIF 读写
+│   ├── scoring.py             # M3GNet 形成能（含降级链）
+│   ├── symmetry.py            # spglib 空间群 + 极性
+│   └── generation.py          # DiffCSP++ 封装（延迟导入）
 ├── data/
-│   ├── structures/**/*.cif    # 186 generated structures
-│   ├── index.csv              # precomputed knowledge base
-│   ├── top30_summary.csv      # TOP30 ranked results
-│   ├── reference/             # experimental GaPSe3I (C2/c)
-│   └── models/matgl/          # embedded M3GNet weights (~2.3 MB)
+│   ├── structures/            # 186 个生成的 CIF
+│   ├── index.csv              # 预计算知识库
+│   ├── reference/             # 实验 GaPSe3I 参照结构
+│   └── models/matgl/          # 内嵌 M3GNet 权重（~2.3MB）
 ├── scripts/
-│   ├── export_library.py      # one-shot data pipeline (local)
-│   ├── generate_gpu.py        # CLI generation
-│   └── smoke_test_agent.py    # agent end-to-end tests
-└── docs/                      # deep-dive notes (Chinese)
+│   ├── export_library.py      # 一站式数据管线（本地跑）
+│   ├── generate_gpu.py        # GPU 生成命令行
+│   └── smoke_test_agent.py    # Agent 端到端测试
+└── docs/                      # 深入文档
 ```
 
-## Validation
+## 测试
 
 ```bash
 python scripts/smoke_test_agent.py
 ```
 
-Covers: single-intent browsing, composite-intent multi-tool chains (query → filter → symmetry, query → compare), plan-whitelist assertions, and GPU-tool degradation on CPU-only environments. Current status: **all pass, 0 failures** (rule-based and LLM modes).
+覆盖单意图浏览、复合意图多工具链（查库 → 筛选 → 对称分析、查库 → 实验对比）、计划白名单校验、无 GPU 环境的降级行为。当前规则模式和 LLM 模式全部通过，0 失败。
 
-## Roadmap
+## 后续计划
 
-- [ ] DFT relaxation (VASP/CP2K) of TOP30 candidates as a second-round referee
-- [ ] Multi-agent debate: a "critic" agent that challenges the planner's tool choices
-- [ ] RAG over Materials Project / ICSD entries for prior-informed generation
-- [ ] Async tool execution (`asyncio`) for parallel M3GNet scoring
-- [ ] Multimodal input: upload an XRD pattern, agent matches candidate structures
+现在这个版本还是"你问我答"，Agent 只能调度我写好的工具。下一步想让它更主动：
 
-## Acknowledgments
+1. **DFT 二审**：TOP30 候选送 VASP/CP2K 弛豫，机器学习势初审 + DFT 终审，误报率会降不少
+2. **多 Agent 互驳**：加一个"批评家"Agent，专门挑规划 Agent 工具选择的毛病，辩论后再执行
+3. **XRD 多模态输入**：拍一张 XRD 谱图传上去，Agent 自己比对候选结构出匹配报告
+4. **异步并行打分**：现在 M3GNet 打分是串行的，换 asyncio 能快几倍
 
-This project stands on the shoulders of two open-source models and their authors' excellent work:
+## 致谢
 
-- **DiffCSP++** — *Space Group Constrained Crystal Generation* (ICLR 2024) by **Rui Jiao, Wenbing Huang, Yu Liu, Deli Zhao, Yang Liu** (Tsinghua University & Renmin University of China). The diffusion model that generates crystal structures from a composition string. Code: [jiaor17/DiffCSP-PP](https://github.com/jiaor17/DiffCSP-PP).
-- **M3GNet** — *A universal graph deep learning interatomic potential for the periodic table* (Nature Computational Science, 2022) by **Chi Chen, Shyue Ping Ong** (UCSD / Materials Virtual Lab). The universal ML interatomic potential that scores formation energies in this project. Code: [materialsvirtuallab/matgl](https://github.com/materialsvirtuallab/matgl).
+这个项目站在两个开源模型的工作之上，向作者致谢：
 
-I am deeply grateful to both teams for releasing their models and weights openly. Without their contributions, this end-to-end system would not be possible.
+- **DiffCSP++** —— Rui Jiao, Wenbing Huang, Yu Liu, Deli Zhao, Yang Liu（清华大学 & 人民大学），*Space Group Constrained Crystal Generation*, ICLR 2024。项目里的晶体结构就是用它生成的。代码：[jiaor17/DiffCSP-PP](https://github.com/jiaor17/DiffCSP-PP)
+- **M3GNet** —— Chi Chen, Shyue Ping Ong（UCSD），*A universal graph deep learning interatomic potential for the periodic table*, Nature Computational Science 2022。项目里的形成能打分全靠它。代码：[materialsvirtuallab/matgl](https://github.com/materialsvirtuallab/matgl)
 
-I also acknowledge [spglib](https://github.com/spglib/spglib) by Togo et al. for space-group analysis, [pymatgen](https://github.com/materialsproject/pymatgen) by the Materials Project team for crystal I/O, and [GLM-4-Flash](https://open.bigmodel.cn/) by Zhipu AI for the free LLM inference.
+同时感谢 [spglib](https://github.com/spglib/spglib)（空间群分析）、[pymatgen](https://github.com/materialsproject/pymatgen)（晶体 IO）、智谱 AI 的 [GLM-4-Flash](https://open.bigmodel.cn/)（免费 LLM 推理）。
 
-## License
+## 许可
 
-MIT — see [LICENSE](LICENSE). The M3GNet weights are redistributed per the [matgl](https://github.com/materialsvirtuallab/matgl) project's terms; DiffCSP++ itself is **not** included in this repo (bring your own checkout for GPU generation).
+MIT，见 [LICENSE](LICENSE)。M3GNet 权重按 matgl 项目条款再分发；DiffCSP++ 本体不在仓库里（GPU 生成需要自备 checkout）。
